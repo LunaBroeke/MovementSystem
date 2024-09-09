@@ -1,41 +1,45 @@
 using System;
-using System.Collections;
-using System.Collections.Generic;
-using System.Net.Sockets;
 using UnityEngine;
 
 public class NetworkClient : MonoBehaviour
 {
-    public string address;
-    public int port;
-    public string message;
+    public string playerName;
+    public Vector3 position;
+    public int health;
+    public int puppetID = -1; // Puppet ID assigned by the server
+
+    public PlayerInfo localPlayerInfo; // Reference to PlayerInfo
+
     private void Start()
     {
-        Connect(address, port, message);
+        // Ensure PlayerInfo is set up from NetworkManager
+        if (localPlayerInfo == null)
+        {
+            Debug.LogError("LocalPlayerInfo is not set.");
+            return;
+        }
+
+        // Initialize the player's properties based on localPlayerInfo
+        playerName = localPlayerInfo.playerName;
+        health = localPlayerInfo.health;
+        puppetID = localPlayerInfo.puppetID;
     }
 
-    static void Connect(string address, int port, string message)
+    private void Update()
     {
-        try
+        if (puppetID != -1) // Only update if we have a valid puppetID
         {
-            using TcpClient client = new TcpClient(address, port);
-
-            byte[] data = System.Text.Encoding.ASCII.GetBytes(message);
-
-            NetworkStream stream = client.GetStream();
-
-            stream.Write(data, 0, data.Length);
-
-            Debug.Log($"Sent {message}");
-
-            data = new byte[256];
-
-            string responseData = string.Empty;
-
-            int bytes = stream.Read(data, 0, data.Length);
-            responseData = System.Text.Encoding.ASCII.GetString(data, 0, bytes);
-            Debug.Log($"Received: {responseData}");
+            // Update player info from the GameObject's transform
+            localPlayerInfo.position = transform.position;
         }
-        catch (Exception e) { Debug.LogError(e.ToString()); }
+    }
+
+    // This method should be called by NetworkManager to update the localPlayerInfo
+    public void SetPlayerInfo(PlayerInfo playerInfo)
+    {
+        localPlayerInfo = playerInfo;
+        playerName = playerInfo.playerName;
+        health = playerInfo.health;
+        puppetID = playerInfo.puppetID;
     }
 }
