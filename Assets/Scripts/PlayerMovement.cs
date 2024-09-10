@@ -78,6 +78,25 @@ public class PlayerMovement : MonoBehaviour
             jCooldown = jumpCooldown;
             rb.AddForce(Vector3.up * jumpForce, ForceMode.Impulse);
         }
+        if (Input.GetKeyDown(KeyCode.LeftAlt)) { CursorCheck(); }
+        if (transform.position.y < -10) { transform.position = new Vector3(0, 2, 0); rb.velocity = Vector3.zero; }
+    }
+
+    void CursorCheck()
+    {
+        switch (Cursor.lockState)
+        {
+            case CursorLockMode.None:
+                Cursor.lockState = CursorLockMode.Locked;
+                Cursor.visible = false;
+                break;
+            case CursorLockMode.Locked:
+                Cursor.lockState = CursorLockMode.None; 
+                Cursor.visible = true;
+                break;
+            case CursorLockMode.Confined:
+                break;
+        }
     }
 
     void Gravity()

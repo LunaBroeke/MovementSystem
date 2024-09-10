@@ -132,21 +132,26 @@ public class NetworkManager : MonoBehaviour
                     if (bytesRead > 0)
                     {
                         string jsonData = Encoding.ASCII.GetString(buffer, 0, bytesRead);
-                        Debug.Log($"Received player data: {jsonData}");
                         if (CheckConnectionError(jsonData)) { return; }
-                        PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(jsonData);
-                        if (playerInfoList == null)
-                        {
-                            Debug.LogWarning("Received invalid player data.");
-                            continue;
-                        }
-                        List<PlayerInfo> players = playerInfoList.players;
+                        string[] strings = jsonData.Split(new[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
 
-                        // Invoke on main thread
-                        UnityMainThreadDispatcher.Instance().Enqueue(() =>
+                        foreach (string str in strings)
                         {
-                            ProcessPlayerInfoList(playerInfoList);
-                        });
+                            ProcessMessage(str);
+                        }
+                        //PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(jsonData);
+                        //if (playerInfoList == null)
+                        //{
+                        //    Debug.LogWarning("Received invalid player data.");
+                        //    continue;
+                        //}
+                        //List<PlayerInfo> players = playerInfoList.players;
+
+                        //// Invoke on main thread
+                        //UnityMainThreadDispatcher.Instance().Enqueue(() =>
+                        //{
+                        //    ProcessPlayerInfoList(playerInfoList);
+                        //});
                     }
                 }
 
@@ -159,6 +164,23 @@ public class NetworkManager : MonoBehaviour
             Debug.LogError($"Error receiving data: {e.ToString()}");
             ReceivePlayerData();
         }
+    }
+
+    void ProcessMessage(string m)
+    {
+        PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(m);
+        if (playerInfoList == null)
+        {
+            Debug.LogWarning("Received invalid player data.");
+            return;
+        }
+        List<PlayerInfo> players = playerInfoList.players;
+
+        // Invoke on main thread
+        UnityMainThreadDispatcher.Instance().Enqueue(() =>
+        {
+            ProcessPlayerInfoList(playerInfoList);
+        });
     }
 
     void ProcessPlayerInfoList(PlayerInfoList playerInfoList)
@@ -224,10 +246,10 @@ public class NetworkManager : MonoBehaviour
                 if (localPuppetID != -1)
                 {
                     string json = JsonUtility.ToJson(localPlayerInfo);
-                    byte[] data = Encoding.ASCII.GetBytes(json);
-
+                    byte[] data = Encoding.ASCII.GetBytes(json + '\n');
+                    //byte[] data = Encoding.ASCII.GetBytes("dam");
                     stream.Write(data, 0, data.Length);
-                    Debug.Log($"Sent player data: {json}");
+                    //Debug.Log($"Sent player data: {json}");
                 }
 
                 Thread.Sleep(sleep);
