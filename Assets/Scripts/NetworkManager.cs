@@ -40,6 +40,8 @@ public class NetworkManager : MonoBehaviour
     public TMPro.TMP_InputField addressField;
     public TMPro.TextMeshProUGUI screenLog;
 
+    public int expectedBytes = 1024;
+
     public List<ScreenLogger> loggers = new List<ScreenLogger>();
     private void Start()
     {
@@ -82,7 +84,7 @@ public class NetworkManager : MonoBehaviour
             Debug.Log("Connected to server");
 
             // Receive the puppet ID assigned by the server
-            byte[] buffer = new byte[256];
+            byte[] buffer = new byte[expectedBytes];
             int bytesRead = stream.Read(buffer, 0, buffer.Length);
             if (bytesRead > 0)
             {
@@ -123,11 +125,11 @@ public class NetworkManager : MonoBehaviour
     {
         try
         {
-            byte[] buffer = new byte[1024];
             while (isConnected)
             {
                 if (stream.DataAvailable)
                 {
+                    byte[] buffer = new byte[1024];
                     int bytesRead = stream.Read(buffer, 0, buffer.Length);
                     if (bytesRead > 0)
                     {
@@ -138,6 +140,7 @@ public class NetworkManager : MonoBehaviour
                         foreach (string str in strings)
                         {
                             ProcessMessage(str);
+                            stream.Flush();
                         }
                         //PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(jsonData);
                         //if (playerInfoList == null)
