@@ -51,9 +51,16 @@ public class NetworkManager : MonoBehaviour
 
     public void ButtonListener()
     {
-        localName = nameField.text;
-        address = addressField.text;
-        Connect(address,port);
+        if (!isConnected)
+        {
+            localName = nameField.text;
+            address = addressField.text;
+            Connect(address, port);
+        }
+        else
+        {
+            Disconnect();
+        }
     }
 
     private void OnApplicationQuit()
@@ -84,7 +91,7 @@ public class NetworkManager : MonoBehaviour
             Debug.Log("Connected to server");
 
             // Receive the puppet ID assigned by the server
-            byte[] buffer = new byte[expectedBytes];
+            byte[] buffer = new byte[512];
             int bytesRead = stream.Read(buffer, 0, buffer.Length);
             if (bytesRead > 0)
             {
@@ -123,9 +130,9 @@ public class NetworkManager : MonoBehaviour
 
     void ReceivePlayerData()
     {
-        try
+        while (isConnected)
         {
-            while (isConnected)
+            try
             {
                 if (stream.DataAvailable)
                 {
@@ -142,30 +149,17 @@ public class NetworkManager : MonoBehaviour
                             ProcessMessage(str);
                             stream.Flush();
                         }
-                        //PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(jsonData);
-                        //if (playerInfoList == null)
-                        //{
-                        //    Debug.LogWarning("Received invalid player data.");
-                        //    continue;
-                        //}
-                        //List<PlayerInfo> players = playerInfoList.players;
-
-                        //// Invoke on main thread
-                        //UnityMainThreadDispatcher.Instance().Enqueue(() =>
-                        //{
-                        //    ProcessPlayerInfoList(playerInfoList);
-                        //});
                     }
                 }
 
                 // Sleep to reduce CPU usage
-                Thread.Sleep(sleep); // Reduced sleep time for better responsiveness
+                //Thread.Sleep(sleep); // Reduced sleep time for better responsiveness
             }
-        }
-        catch (Exception e)
-        {
-            Debug.LogError($"Error receiving data: {e.ToString()}");
-            ReceivePlayerData();
+            catch (Exception e)
+            {
+                Debug.LogError($"Error receiving data: {e.ToString()}");
+                continue;
+            }
         }
     }
 
@@ -266,6 +260,9 @@ public class NetworkManager : MonoBehaviour
 
     void Disconnect()
     {
+        byte[] send = Encoding.ASCII.GetBytes("Disconnect\n");
+        stream.Write(send, 0, send.Length);
+        Thread.Sleep(30);
         isConnected = false;
         if (clientThread != null && clientThread.IsAlive)
         {
@@ -320,7 +317,7 @@ public class NetworkManager : MonoBehaviour
         {
             case "Read failure":
                 Disconnect();
-                Connect(address,port);
+                Connect(address, port);
                 return true;
             case "Server full":
                 Disconnect();
