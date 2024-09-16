@@ -6,16 +6,31 @@ using System.Text;
 using System.Threading;
 using Unity.VisualScripting;
 using UnityEngine;
+using UnityEngine.UIElements;
 using Debug = UnityEngine.Debug;
 
 [Serializable]
 public class PlayerInfo
 {
+    public int puppetID;
     public string playerName;
     public Vector3 position;
     public int health;
-    public int puppetID;
 }
+[Serializable]
+public class ObjectInfo
+{
+    public int puppetID;
+    public Position position;
+    public int master;
+}
+[Serializable]
+public class ServerInfo
+{
+    public string type;
+    public PlayerInfo master;
+}
+public class TypeCheck { public string type; }
 
 public class NetworkManager : MonoBehaviour
 {
@@ -97,7 +112,7 @@ public class NetworkManager : MonoBehaviour
             {
                 string puppetIDString = Encoding.ASCII.GetString(buffer, 0, bytesRead).Trim();
                 if (CheckConnectionError(puppetIDString)) { return; }
-                localPuppetID = int.Parse(puppetIDString);
+                localPuppetID = int.Parse(puppetIDString); // sometimes it cannot parse.
                 localPlayerInfo = new PlayerInfo
                 {
                     puppetID = localPuppetID,
@@ -120,11 +135,16 @@ public class NetworkManager : MonoBehaviour
                 }
             }
         }
+        catch (FormatException e)
+        {
+            Debug.LogError($"Formatting error: {e}");
+            Disconnect(1f);
+        }
         catch (Exception e)
         {
-            Debug.LogError($"Connection error: {e.Message}");
+            Debug.LogError($"Connection error: {e}");
             Log($"Connection error: {e.Message}");
-            Disconnect(true);
+            Disconnect(5f);
         }
     }
 
@@ -165,12 +185,26 @@ public class NetworkManager : MonoBehaviour
 
     void ProcessMessage(string m)
     {
-        PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(m);
-        if (playerInfoList == null)
+        string check = JsonUtility.FromJson<TypeCheck>(m).type;
+        switch (check)
         {
-            Debug.LogWarning("Received invalid player data.");
-            return;
+            case "PlayerInfo":
+                ProcessPlayerInfo(m);
+                break;
+            case "ServerInfo":
+                ProcessServerInfo(m);
+                break;
+            case "ObjectInfo":
+                break;
+            default:
+                Debug.LogError("received invalid data");
+                throw new Exception("fuck you");
         }
+        
+    }
+    void ProcessPlayerInfo(string m)
+    {
+        PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(m);
         List<PlayerInfo> players = playerInfoList.players;
 
         // Invoke on main thread
@@ -178,6 +212,13 @@ public class NetworkManager : MonoBehaviour
         {
             ProcessPlayerInfoList(playerInfoList);
         });
+    }
+
+    void ProcessServerInfo(string m)
+    {
+        ServerInfo si = JsonUtility.FromJson<ServerInfo>(m);
+        if (si.master.puppetID == localPuppetID) { Debug.Log("Current Player is master"); }
+        else { Debug.Log("Current Player is NOT master"); }
     }
 
     void ProcessPlayerInfoList(PlayerInfoList playerInfoList)
@@ -279,7 +320,7 @@ public class NetworkManager : MonoBehaviour
 
         Debug.Log("Disconnected from server");
     }
-    void Disconnect(bool reconnect)
+    void Disconnect(float time)
     {
         isConnected = false;
         if (clientThread != null && clientThread.IsAlive)
@@ -297,7 +338,7 @@ public class NetworkManager : MonoBehaviour
 
         Debug.Log("Disconnected from server");
 
-        if (reconnect) { StartCoroutine(DelayConnect(5)); }
+        StartCoroutine(DelayConnect(time));
     }
     IEnumerator DelayConnect(float t)
     {
@@ -354,7 +395,14 @@ public class NetworkManager : MonoBehaviour
 [Serializable]
 public class PlayerInfoList
 {
+    public const string type = "PlayerInfoList";
     public List<PlayerInfo> players = new();
+}
+[Serializable]
+public class ObjectInfoList
+{
+    public const string type = "ObjectInfoList";
+    public List<ObjectInfo> objects = new();
 }
 
 public class ScreenLogger
