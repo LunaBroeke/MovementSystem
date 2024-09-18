@@ -1,45 +1,45 @@
 using System;
 using UnityEngine;
+using UnityEngine.UIElements;
 
-public class NetworkClient : MonoBehaviour
+[Serializable]
+public class PlayerInfo
 {
+    public int puppetID = -1;
     public string playerName;
     public Vector3 position;
     public int health;
-    public int puppetID = -1; // Puppet ID assigned by the server
+}
+[Serializable]
+public class ObjectInfo
+{
+    public int puppetID = -1;
+    public Vector3 position;
+    public int master = -1;
+    public int listPos;
+}
 
+public enum PuppetType
+{
+    None = 0,
+    Player,
+    Object,
+    Entity,
+}
+public class NetworkClient : MonoBehaviour
+{
+    //public string playerName;
+    //public Vector3 position;
+    //public int health;
+    //public int puppetID = -1; // Puppet ID assigned by the server
+    public PuppetType puppetType = PuppetType.None;
     public PlayerInfo localPlayerInfo; // Reference to PlayerInfo
+    public ObjectInfo localObjectInfo;
+    [Space]
+    public NetworkPuppet networkPuppet;
 
     private void Start()
     {
-        // Ensure PlayerInfo is set up from NetworkManager
-        if (localPlayerInfo == null)
-        {
-            Debug.LogError("LocalPlayerInfo is not set.");
-            return;
-        }
-
-        // Initialize the player's properties based on localPlayerInfo
-        playerName = localPlayerInfo.playerName;
-        health = localPlayerInfo.health;
-        puppetID = localPlayerInfo.puppetID;
-    }
-
-    private void Update()
-    {
-        if (puppetID != -1) // Only update if we have a valid puppetID
-        {
-            // Update player info from the GameObject's transform
-            localPlayerInfo.position = transform.position;
-        }
-    }
-
-    // This method should be called by NetworkManager to update the localPlayerInfo
-    public void SetPlayerInfo(PlayerInfo playerInfo)
-    {
-        localPlayerInfo = playerInfo;
-        playerName = playerInfo.playerName;
-        health = playerInfo.health;
-        puppetID = playerInfo.puppetID;
+        if (puppetType == PuppetType.Object) { networkPuppet = GetComponent<NetworkPuppet>(); }
     }
 }

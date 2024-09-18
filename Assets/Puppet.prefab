@@ -365,10 +365,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   playerInfo:
+    puppetID: 0
     playerName: 
     position: {x: 0, y: 0, z: 0}
     health: 0
-    puppetID: 0
   col: 0
   debug: 1
   moving: 0

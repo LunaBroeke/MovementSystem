@@ -8,27 +8,17 @@ using Unity.VisualScripting;
 using UnityEngine;
 using UnityEngine.UIElements;
 using Debug = UnityEngine.Debug;
-
-[Serializable]
-public class PlayerInfo
-{
-    public int puppetID;
-    public string playerName;
-    public Vector3 position;
-    public int health;
-}
-[Serializable]
-public class ObjectInfo
-{
-    public int puppetID;
-    public Position position;
-    public int master;
-}
 [Serializable]
 public class ServerInfo
 {
-    public string type;
+    public string type = "ServerInfo";
     public PlayerInfo master;
+}
+public class Command
+{
+    public string type = "Command";
+    public string command;
+    public string[] arguments;
 }
 public class TypeCheck { public string type; }
 
@@ -42,18 +32,22 @@ public class NetworkManager : MonoBehaviour
     private NetworkStream stream;
     private Thread clientThread;
     private Thread sendThread;
+    private Thread checkThread;
     private bool isConnected = false;
 
+    [Header("Player")]
     public List<GameObject> playerObjects = new List<GameObject>();
     public PlayerInfo localPlayerInfo { get; set; }
     public NetworkClient localPlayerObject;
     public int localPuppetID = -1;
-    public int sleep = 100;
+    public bool isMaster = false;
 
     public string localName;
     public TMPro.TMP_InputField nameField;
     public TMPro.TMP_InputField addressField;
     public TMPro.TextMeshProUGUI screenLog;
+    [Header("Objects")]
+    public List<GameObject> localObjects = new List<GameObject>();
 
     public int expectedBytes = 1024;
 
@@ -62,6 +56,24 @@ public class NetworkManager : MonoBehaviour
     {
         UnityMainThreadDispatcher.Instance();
         //Connect(address, port);
+
+        foreach (NetworkClient nc in FindObjectsOfType<NetworkClient>())
+        {
+            if (nc.puppetType == PuppetType.Object)
+            {
+                localObjects.Add(nc.gameObject);
+            }
+        }
+        //checkThread = new Thread(ObjectIDCheck) { IsBackground = true };
+    }
+
+    public void ObjectIDCheck()
+    {
+        foreach (GameObject obj in localObjects)
+        {
+            AssignObjectID(obj);
+        }
+        //checkThread.Join();
     }
 
     public void ButtonListener()
@@ -128,9 +140,15 @@ public class NetworkManager : MonoBehaviour
                 {
                     // Update existing localPlayerObject with new localPlayerInfo
                     NetworkClient localNetworkClient = localPlayerObject.GetComponent<NetworkClient>();
-                    if (localNetworkClient != null)
+                    if (localNetworkClient != null && localNetworkClient.puppetType == PuppetType.Player)
                     {
-                        localNetworkClient.localPlayerInfo = localPlayerInfo;
+                        //localNetworkClient.localPlayerInfo = localPlayerInfo;
+                        localNetworkClient.localPlayerInfo.puppetID = localPlayerInfo.puppetID;
+                        localNetworkClient.localPlayerInfo.playerName = localPlayerInfo.playerName;
+                    }
+                    else if (localNetworkClient.puppetType != PuppetType.Player)
+                    {
+                        Debug.LogError("LocalPlayer is NOT assigned as player");
                     }
                 }
             }
@@ -150,6 +168,11 @@ public class NetworkManager : MonoBehaviour
 
     void ReceivePlayerData()
     {
+        //checkThread.Start();
+
+        //ObjectIDCheck();
+        
+        bool objCheck = false;
         while (isConnected)
         {
             try
@@ -169,11 +192,13 @@ public class NetworkManager : MonoBehaviour
                             ProcessMessage(str);
                             stream.Flush();
                         }
+                        
                     }
                 }
 
                 // Sleep to reduce CPU usage
                 //Thread.Sleep(sleep); // Reduced sleep time for better responsiveness
+                if (!objCheck) {  objCheck = true; }
             }
             catch (Exception e)
             {
@@ -195,18 +220,20 @@ public class NetworkManager : MonoBehaviour
                 ProcessServerInfo(m);
                 break;
             case "ObjectInfo":
+                ProcessObjectInfo(m);
+                break;
+            case "Command":
+                CommandHandler(m);
                 break;
             default:
                 Debug.LogError("received invalid data");
-                throw new Exception("fuck you");
+                break;
         }
-        
+
     }
     void ProcessPlayerInfo(string m)
     {
         PlayerInfoList playerInfoList = JsonUtility.FromJson<PlayerInfoList>(m);
-        List<PlayerInfo> players = playerInfoList.players;
-
         // Invoke on main thread
         UnityMainThreadDispatcher.Instance().Enqueue(() =>
         {
@@ -219,6 +246,16 @@ public class NetworkManager : MonoBehaviour
         ServerInfo si = JsonUtility.FromJson<ServerInfo>(m);
         if (si.master.puppetID == localPuppetID) { Debug.Log("Current Player is master"); }
         else { Debug.Log("Current Player is NOT master"); }
+    }
+
+    void ProcessObjectInfo(string m)
+    {
+        ObjectInfoList objectInfoList = JsonUtility.FromJson<ObjectInfoList>(m);
+
+        UnityMainThreadDispatcher.Instance().Enqueue(() =>
+        {
+            ProcessObjectInfoList(objectInfoList);
+        });
     }
 
     void ProcessPlayerInfoList(PlayerInfoList playerInfoList)
@@ -247,6 +284,73 @@ public class NetworkManager : MonoBehaviour
         }
     }
 
+    void ProcessObjectInfoList(ObjectInfoList objectInfoList)
+    {
+        foreach (ObjectInfo objectInfo in objectInfoList.objects)
+        {
+            if (!isMaster)
+            {
+                if (localObjects.Contains(FindGoByID(objectInfo)))
+                {
+                    GameObject objectToUpdate = FindGoByID(objectInfo);
+                    NetworkPuppet npu = objectToUpdate.GetComponent<NetworkPuppet>();
+                    npu.newPos = objectInfo.position;
+                    npu.inactiveTimer = 0f;
+                }
+            }
+        }
+    }
+
+    void AssignObjectID(GameObject obj)
+    {
+        ObjectInfo objectInfo = obj.GetComponent<NetworkClient>().localObjectInfo;
+        Debug.LogWarning("assign woa");
+        if (objectInfo.puppetID == -1)
+        {
+            Debug.LogWarning("assign w");
+            int tempID = UnityEngine.Random.Range(1, 100);
+            Command c = new Command
+            {
+                command = "RequestID",
+                arguments = new string[] { obj.name, tempID.ToString(), "" }
+            };
+            string s = JsonUtility.ToJson(c);
+            byte[] data = Encoding.UTF8.GetBytes(s + '\n');
+            stream.WriteTimeout = 1000;
+            stream.Write(data, 0, data.Length);
+            bool received = false;
+            byte[] buffer = new byte[1024];
+            int bytesRead = stream.Read(buffer, 0, buffer.Length);
+            string a = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+            string[] b = a.Split('\n', options:StringSplitOptions.RemoveEmptyEntries);
+            foreach (string st in b)
+            {
+                Command d = JsonUtility.FromJson<Command>(st);
+                try
+                {
+                    if (d.type == "Command" && d.command == "SyncID")
+                    {
+                        if (d.arguments[1] == tempID.ToString())
+                        {
+                            objectInfo.puppetID = int.Parse(d.arguments[2]);
+                            obj.name = $"{obj.name} ({objectInfo.puppetID})";
+                            received = true;
+                        }
+                    }
+                    else
+                    {
+                        Debug.LogWarning("a");
+                    }
+                }
+                catch (Exception e)
+                {
+                    Debug.LogError(e);
+                    break;
+                }
+            }
+        }
+    }
+
     static PlayerInfo FindPlayerByID(List<PlayerInfo> players, int playerID)
     {
         foreach (PlayerInfo player in players) { if (player.puppetID == playerID) { return player; } }
@@ -260,6 +364,16 @@ public class NetworkManager : MonoBehaviour
         {
             PlayerInfo pi = np.playerInfo;
             if (pi.puppetID == playerInfo.puppetID) { return np.gameObject; }
+        }
+        return null;
+    }
+    GameObject FindGoByID(ObjectInfo objectInfo)
+    {
+        NetworkPuppet[] nps = FindObjectsOfType<NetworkPuppet>();
+        foreach (NetworkPuppet np in nps)
+        {
+            ObjectInfo pi = np.objectInfo;
+            if (pi.puppetID == objectInfo.puppetID) { return np.gameObject; }
         }
         return null;
     }
@@ -289,8 +403,7 @@ public class NetworkManager : MonoBehaviour
                     stream.Write(data, 0, data.Length);
                     //Debug.Log($"Sent player data: {json}");
                 }
-
-                Thread.Sleep(sleep);
+                Thread.Sleep(100);
             }
         }
         catch (Exception e)
@@ -366,6 +479,17 @@ public class NetworkManager : MonoBehaviour
                 return true;
             default:
                 return false;
+        }
+    }
+
+    private void CommandHandler(string m)
+    {
+        Command c = JsonUtility.FromJson<Command>(m);
+        switch (c.command)
+        {
+            case "ObjectSyncRequest":
+                UnityMainThreadDispatcher.Instance().Enqueue(() => { ObjectIDCheck(); });
+                break;
         }
     }
 

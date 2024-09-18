@@ -1,11 +1,14 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class NetworkPuppet : MonoBehaviour
 {
     public PlayerInfo playerInfo;
-
+    public ObjectInfo objectInfo;
+    public PuppetType type;
+    public NetworkManager networkManager;
     private NetworkClient nc;
     public bool col = true;
     public bool debug = false;
@@ -22,13 +25,30 @@ public class NetworkPuppet : MonoBehaviour
     public float inactiveMax = 10f;
     private void Start()
     {
-        nc = FindObjectOfType<NetworkClient>();
+        networkManager = FindObjectOfType<NetworkManager>();
+        if (!GetComponent<NetworkClient>())
+        {
+            foreach (NetworkClient n in FindObjectsOfType<NetworkClient>()) { if (n.puppetType == PuppetType.Player) { nc = n; break; }}
+            if (nc.localPlayerInfo.puppetID == playerInfo.puppetID && debug == false) { LocalPuppet(); }
+            if (col == false) { GetComponent<CapsuleCollider>().enabled = false; }
+            nameTag.SetPlayerName(playerInfo.playerName);
+            StartMove();
+        }
+        else
+        {
+            nc = GetComponent<NetworkClient>();
+            if (networkManager.isMaster == false)
+            {
+                StartMove();
+            }
+        }
+        type = nc.puppetType;
+    }
 
-        if (nc.localPlayerInfo.puppetID == playerInfo.puppetID && debug == false) { LocalPuppet(); }
-        if (col == false) { GetComponent<CapsuleCollider>().enabled = false; }
+    void StartMove()
+    {
         newPos = transform.position;
         newRot = transform.eulerAngles;
-        nameTag.SetPlayerName(playerInfo.playerName);
         StartCoroutine(MovePuppet());
     }
 
@@ -72,9 +92,12 @@ public class NetworkPuppet : MonoBehaviour
 
     private void Update()
     {
-        inactiveTimer += Time.deltaTime;
+        if (type == PuppetType.Player)
+        {
+            inactiveTimer += Time.deltaTime;
 
-        if (inactiveTimer > inactiveMax) { Destroy(gameObject); }
+            if (inactiveTimer > inactiveMax) { Destroy(gameObject); }
+        }
     }
 
 #if UNITY_EDITOR

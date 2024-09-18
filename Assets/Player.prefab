@@ -154,10 +154,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 578e9bc214c4f1e48a42c9890af824a4, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  address: 127.0.0.1
-  port: 37484
-  playerName: Luwuna
-  position: {x: 0, y: 0, z: 0}
-  health: 0
-  inputField: {fileID: 0}
-  puppetID: 0
+  puppetType: 1
+  localPlayerInfo:
+    puppetID: 0
+    playerName: 
+    position: {x: 0, y: 0, z: 0}
+    health: 0
+  localObjectInfo:
+    puppetID: 0
+    position: 0
+    master: 0
+  networkPuppet: {fileID: 0}
