@@ -32,7 +32,7 @@ public class NetworkManager : MonoBehaviour
     private NetworkStream stream;
     private Thread clientThread;
     private Thread sendThread;
-    private Thread checkThread;
+    private Thread objThread;
     private bool isConnected = false;
 
     [Header("Player")]
@@ -40,7 +40,7 @@ public class NetworkManager : MonoBehaviour
     public PlayerInfo localPlayerInfo { get; set; }
     public NetworkClient localPlayerObject;
     public int localPuppetID = -1;
-    public bool isMaster = false;
+    public static bool isMaster = false;
 
     public string localName;
     public TMPro.TMP_InputField nameField;
@@ -48,6 +48,7 @@ public class NetworkManager : MonoBehaviour
     public TMPro.TextMeshProUGUI screenLog;
     [Header("Objects")]
     public List<GameObject> localObjects = new List<GameObject>();
+    public ObjectInfoList objInfo = new ObjectInfoList();
 
     public int expectedBytes = 1024;
 
@@ -62,11 +63,12 @@ public class NetworkManager : MonoBehaviour
             if (nc.puppetType == PuppetType.Object)
             {
                 localObjects.Add(nc.gameObject);
+                objInfo.objects.Add(nc.localObjectInfo);
             }
         }
         //checkThread = new Thread(ObjectIDCheck) { IsBackground = true };
     }
-
+    [Obsolete]
     public void ObjectIDCheck()
     {
         foreach (GameObject obj in localObjects)
@@ -115,6 +117,12 @@ public class NetworkManager : MonoBehaviour
             };
             sendThread.Start();
 
+            objThread = new Thread(SendObjectDataLoop)
+            {
+                IsBackground = true
+            };
+            objThread.Start();
+
             Debug.Log("Connected to server");
 
             // Receive the puppet ID assigned by the server
@@ -152,6 +160,7 @@ public class NetworkManager : MonoBehaviour
                     }
                 }
             }
+
         }
         catch (FormatException e)
         {
@@ -171,7 +180,7 @@ public class NetworkManager : MonoBehaviour
         //checkThread.Start();
 
         //ObjectIDCheck();
-        
+
         bool objCheck = false;
         while (isConnected)
         {
@@ -179,7 +188,7 @@ public class NetworkManager : MonoBehaviour
             {
                 if (stream.DataAvailable)
                 {
-                    byte[] buffer = new byte[1024];
+                    byte[] buffer = new byte[1024 * 3];
                     int bytesRead = stream.Read(buffer, 0, buffer.Length);
                     if (bytesRead > 0)
                     {
@@ -192,13 +201,13 @@ public class NetworkManager : MonoBehaviour
                             ProcessMessage(str);
                             stream.Flush();
                         }
-                        
+
                     }
                 }
 
                 // Sleep to reduce CPU usage
                 //Thread.Sleep(sleep); // Reduced sleep time for better responsiveness
-                if (!objCheck) {  objCheck = true; }
+                if (!objCheck) { objCheck = true; }
             }
             catch (Exception e)
             {
@@ -251,7 +260,6 @@ public class NetworkManager : MonoBehaviour
     void ProcessObjectInfo(string m)
     {
         ObjectInfoList objectInfoList = JsonUtility.FromJson<ObjectInfoList>(m);
-
         UnityMainThreadDispatcher.Instance().Enqueue(() =>
         {
             ProcessObjectInfoList(objectInfoList);
@@ -279,6 +287,7 @@ public class NetworkManager : MonoBehaviour
             GameObject playerToUpdate = FindGoByID(playerInfo);
             NetworkPuppet npu = playerToUpdate.GetComponent<NetworkPuppet>();
             npu.newPos = playerInfo.position;
+            npu.newRot = playerInfo.rotation;
             npu.inactiveTimer = 0f;
             //playerToUpdate.transform.position = playerInfo.position;
         }
@@ -286,21 +295,20 @@ public class NetworkManager : MonoBehaviour
 
     void ProcessObjectInfoList(ObjectInfoList objectInfoList)
     {
+        Debug.LogWarning(objectInfoList.objects.Count);
         foreach (ObjectInfo objectInfo in objectInfoList.objects)
         {
             if (!isMaster)
             {
-                if (localObjects.Contains(FindGoByID(objectInfo)))
-                {
-                    GameObject objectToUpdate = FindGoByID(objectInfo);
-                    NetworkPuppet npu = objectToUpdate.GetComponent<NetworkPuppet>();
-                    npu.newPos = objectInfo.position;
-                    npu.inactiveTimer = 0f;
-                }
+                GameObject objectToUpdate = FindGoByID(objectInfo);
+                NetworkPuppet npu = objectToUpdate.GetComponent<NetworkPuppet>();
+                npu.newPos = objectInfo.position;
+                npu.newRot = objectInfo.rotation;
+                npu.inactiveTimer = 0f;
             }
         }
     }
-
+    [Obsolete]
     void AssignObjectID(GameObject obj)
     {
         ObjectInfo objectInfo = obj.GetComponent<NetworkClient>().localObjectInfo;
@@ -322,7 +330,7 @@ public class NetworkManager : MonoBehaviour
             byte[] buffer = new byte[1024];
             int bytesRead = stream.Read(buffer, 0, buffer.Length);
             string a = Encoding.UTF8.GetString(buffer, 0, bytesRead);
-            string[] b = a.Split('\n', options:StringSplitOptions.RemoveEmptyEntries);
+            string[] b = a.Split('\n', options: StringSplitOptions.RemoveEmptyEntries);
             foreach (string st in b)
             {
                 Command d = JsonUtility.FromJson<Command>(st);
@@ -369,11 +377,12 @@ public class NetworkManager : MonoBehaviour
     }
     GameObject FindGoByID(ObjectInfo objectInfo)
     {
-        NetworkPuppet[] nps = FindObjectsOfType<NetworkPuppet>();
-        foreach (NetworkPuppet np in nps)
+        NetworkClient[] nps = FindObjectsOfType<NetworkClient>();
+        foreach (NetworkClient np in nps)
         {
-            ObjectInfo pi = np.objectInfo;
-            if (pi.puppetID == objectInfo.puppetID) { return np.gameObject; }
+            ObjectInfo pi = np.localObjectInfo;
+            Debug.Log($"seen {np.gameObject.name}");
+            if (pi.puppetID == objectInfo.puppetID) { Debug.LogWarning($"found {pi.puppetID}"); return np.gameObject; }
         }
         return null;
     }
@@ -382,7 +391,7 @@ public class NetworkManager : MonoBehaviour
     {
         try
         {
-            if (isConnected) localPlayerInfo.position = localPlayerObject.transform.position;
+            if (isConnected) { localPlayerInfo.position = localPlayerObject.transform.position; localPlayerInfo.rotation = localPlayerObject.transform.rotation; }
         }
         catch { Disconnect(); Connect(address, port); }
 
@@ -397,6 +406,7 @@ public class NetworkManager : MonoBehaviour
             {
                 if (localPuppetID != -1)
                 {
+                    localPlayerInfo.position = localPlayerInfo.position.Round(2);
                     string json = JsonUtility.ToJson(localPlayerInfo);
                     byte[] data = Encoding.ASCII.GetBytes(json + '\n');
                     //byte[] data = Encoding.ASCII.GetBytes("dam");
@@ -408,7 +418,33 @@ public class NetworkManager : MonoBehaviour
         }
         catch (Exception e)
         {
-            Debug.LogError($"Error sending data: {e.Message}");
+            Debug.LogError($"Error sending player data: {e.Message}");
+            Disconnect();
+        }
+    }
+    void SendObjectDataLoop()
+    {
+        try
+        {
+            while (isConnected)
+            {
+                if (isMaster)
+                {
+                    string s = "";
+                    foreach (ObjectInfo oi in objInfo.objects)
+                    {
+                        oi.position = oi.position.Round(2);
+                        string a = JsonUtility.ToJson(oi) + '\n';
+                    }
+                    //byte[] data = Encoding.UTF8.GetBytes(s + '\n');
+                    //stream.Write(data, 0, data.Length);
+                }
+                Thread.Sleep(100);
+            }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error sending object data: {e.Message}");
         }
     }
 
@@ -488,8 +524,27 @@ public class NetworkManager : MonoBehaviour
         switch (c.command)
         {
             case "ObjectSyncRequest":
-                UnityMainThreadDispatcher.Instance().Enqueue(() => { ObjectIDCheck(); });
+                Debug.LogError("ObjectSyncRequest is obsolete");
                 break;
+            case "BroadcastMaster":
+                AssignMaster(m);
+                break;
+        }
+    }
+
+    private void AssignMaster(string m)
+    {
+        Command c = JsonUtility.FromJson<Command>(m);
+        if (int.Parse(c.arguments[0]) == localPuppetID) { isMaster = true; Debug.Log("Local Player is master"); }
+        else { Debug.Log("Local Player is NOT master"); }
+        UnityMainThreadDispatcher.Instance().Enqueue(() => ConnectObjects());
+    }
+
+    private void ConnectObjects()
+    {
+        foreach (GameObject obj in localObjects)
+        {
+            obj.GetComponent<NetworkClient>().Connect();
         }
     }
 
@@ -533,4 +588,40 @@ public class ScreenLogger
 {
     public string message;
     public float timer = 5f;
+}
+
+static class ExtensionMethods
+{
+    /// <summary>
+    /// Rounds Vector3.
+    /// </summary>
+    /// <param name="vector3"></param>
+    /// <param name="decimalPlaces"></param>
+    /// <returns></returns>
+    public static Vector3 Round(this Vector3 vector3, int decimalPlaces = 2)
+    {
+        float multiplier = 1;
+        for (int i = 0; i < decimalPlaces; i++)
+        {
+            multiplier *= 10f;
+        }
+        return new Vector3(
+            Mathf.Round(vector3.x * multiplier) / multiplier,
+            Mathf.Round(vector3.y * multiplier) / multiplier,
+            Mathf.Round(vector3.z * multiplier) / multiplier);
+    }
+
+    public static Quaternion Round(this Quaternion quaternion, int decimalPlaces = 2)
+    {
+        float multiplier = 1;
+        for (int i = 0;i < decimalPlaces;i++)
+        {
+            multiplier *= 10f;
+        }
+        return new Quaternion(
+            Mathf.Round(quaternion.x*multiplier)/multiplier,
+            Mathf.Round(quaternion.y*multiplier)/multiplier,
+            Mathf.Round(quaternion.z*multiplier)/multiplier,
+            Mathf.Round(quaternion.w*multiplier)/multiplier);
+    }
 }

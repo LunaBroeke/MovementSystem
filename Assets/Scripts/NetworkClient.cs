@@ -8,6 +8,7 @@ public class PlayerInfo
     public int puppetID = -1;
     public string playerName;
     public Vector3 position;
+    public Quaternion rotation;
     public int health;
 }
 [Serializable]
@@ -15,6 +16,7 @@ public class ObjectInfo
 {
     public int puppetID = -1;
     public Vector3 position;
+    public Quaternion rotation;
     public int master = -1;
     public int listPos;
 }
@@ -40,6 +42,32 @@ public class NetworkClient : MonoBehaviour
 
     private void Start()
     {
-        if (puppetType == PuppetType.Object) { networkPuppet = GetComponent<NetworkPuppet>(); }
+        if (puppetType == PuppetType.Object) 
+        { 
+            networkPuppet = GetComponent<NetworkPuppet>();
+            networkPuppet.enabled = false;
+            gameObject.name = $"{gameObject.name}({localObjectInfo.puppetID})";
+            if (localObjectInfo.puppetID == -1)
+            {
+                Debug.LogWarning($"{gameObject.name} has an ID of -1 and should be changed immediately");
+            }
+        }
+    }
+
+    public void Connect()
+    {
+        networkPuppet.enabled = true;
+    }
+
+    private void Update()
+    {
+        if (puppetType == PuppetType.Object)
+        {
+            if (NetworkManager.isMaster)
+            {
+                localObjectInfo.position = transform.position;
+                localObjectInfo.rotation = transform.rotation;
+            }
+        }
     }
 }
