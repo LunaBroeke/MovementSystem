@@ -150,6 +150,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkObject (4)
       objectReference: {fileID: 0}
+    - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5360591833529313164, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_RootOrder
       value: 17
@@ -309,6 +313,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: NetworkObject (1)
       objectReference: {fileID: 0}
+    - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 5360591833529313164, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_RootOrder
       value: 14
@@ -369,6 +377,10 @@ PrefabInstance:
     - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_Name
       value: NetworkObject (2)
+      objectReference: {fileID: 0}
+    - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5360591833529313164, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_RootOrder
@@ -1544,7 +1556,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 821410043}
-  m_LocalRotation: {x: 0.14521314, y: -1.6271901e-15, z: 2.6894993e-16, w: 0.98940045}
+  m_LocalRotation: {x: 0.14521314, y: -8.619646e-15, z: 9.284736e-16, w: 0.98940045}
   m_LocalPosition: {x: 0, y: 4.65, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1806,7 +1818,7 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 963194225}
-  m_LocalRotation: {x: 0.14521314, y: -1.6271901e-15, z: 2.6894993e-16, w: 0.98940045}
+  m_LocalRotation: {x: 0.14521314, y: -8.619646e-15, z: 9.284736e-16, w: 0.98940045}
   m_LocalPosition: {x: 0, y: 4.65, z: -10}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
@@ -1858,6 +1870,10 @@ PrefabInstance:
     - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_Name
       value: NetworkObject (3)
+      objectReference: {fileID: 0}
+    - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5360591833529313164, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_RootOrder
@@ -2748,6 +2764,7 @@ MonoBehaviour:
   playerPrefab: {fileID: 4411321043066247492, guid: 5a8e15f9967f7734fb460e03ff24e068, type: 3}
   address: 127.0.0.1
   port: 37484
+  udpPort: 37485
   playerObjects: []
   localPlayerObject: {fileID: 33827244}
   localPuppetID: -1
@@ -2984,6 +3001,10 @@ PrefabInstance:
     - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_Name
       value: NetworkObject (5)
+      objectReference: {fileID: 0}
+    - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5360591833529313164, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_RootOrder
@@ -3354,6 +3375,10 @@ PrefabInstance:
     - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_Name
       value: NetworkObject
+      objectReference: {fileID: 0}
+    - target: {fileID: 5360591833529313160, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
+      propertyPath: m_IsActive
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 5360591833529313164, guid: 6957e3c60114e17488e433b97f054aef, type: 3}
       propertyPath: m_RootOrder

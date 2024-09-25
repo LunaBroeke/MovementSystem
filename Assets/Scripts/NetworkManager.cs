@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using System.Threading;
@@ -27,6 +28,7 @@ public class NetworkManager : MonoBehaviour
     public GameObject playerPrefab;
     public string address;
     public int port;
+    public int udpPort = 37485;
 
     private TcpClient client;
     private NetworkStream stream;
@@ -53,6 +55,8 @@ public class NetworkManager : MonoBehaviour
     public int expectedBytes = 1024;
 
     public List<ScreenLogger> loggers = new List<ScreenLogger>();
+
+    public UdpClient udpClient;
     private void Start()
     {
         UnityMainThreadDispatcher.Instance();
@@ -109,19 +113,15 @@ public class NetworkManager : MonoBehaviour
             {
                 IsBackground = true
             };
-            clientThread.Start();
-
             sendThread = new Thread(SendPlayerDataLoop)
             {
                 IsBackground = true
             };
-            sendThread.Start();
-
             objThread = new Thread(SendObjectDataLoop)
             {
                 IsBackground = true
             };
-            objThread.Start();
+            //objThread.Start();
 
             Debug.Log("Connected to server");
 
@@ -153,6 +153,7 @@ public class NetworkManager : MonoBehaviour
                         //localNetworkClient.localPlayerInfo = localPlayerInfo;
                         localNetworkClient.localPlayerInfo.puppetID = localPlayerInfo.puppetID;
                         localNetworkClient.localPlayerInfo.playerName = localPlayerInfo.playerName;
+                        TcpCheck();
                     }
                     else if (localNetworkClient.puppetType != PuppetType.Player)
                     {
@@ -160,6 +161,8 @@ public class NetworkManager : MonoBehaviour
                     }
                 }
             }
+            clientThread.Start();
+            StartUDPClient(address, udpPort, 0);
 
         }
         catch (FormatException e)
@@ -171,8 +174,88 @@ public class NetworkManager : MonoBehaviour
         {
             Debug.LogError($"Connection error: {e}");
             Log($"Connection error: {e.Message}");
-            Disconnect(5f);
+            Disconnect();
         }
+    }
+    public void TcpCheck()
+    {
+        SendPlayerDataTCP();
+    }
+    public void ReceivePing()
+    {
+
+    }
+    public void SendPong(Command c)
+    {
+        c.command = "PONG";
+        string s = JsonUtility.ToJson(c);
+        byte[] data = Encoding.UTF8.GetBytes(s);
+        stream.Write(data, 0, data.Length);
+    }
+    public void StartUDPClient(string serverAddress, int serverPort, int localPort)
+    {
+        udpClient = new UdpClient(localPort);
+        udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+        IPEndPoint remoteEndPoint = new IPEndPoint(IPAddress.Parse(serverAddress), serverPort);
+        //udpClient.Client.Bind(remoteEndPoint); 
+        Debug.Log($"UDP Client started, sending to {remoteEndPoint}");
+        Debug.Log($"{((IPEndPoint)udpClient.Client.LocalEndPoint)}");
+        Thread udpReceiveThread = new Thread(() =>
+        {
+            while (isConnected)
+            {
+                try
+                {
+                    Debug.LogWarning("R");
+                    byte[] receivedData = udpClient.Receive(ref remoteEndPoint);
+                    Debug.LogWarning("B");
+                    string receivedMessage = Encoding.UTF8.GetString(receivedData);
+                    Debug.Log($"Received UDP message: {receivedMessage}");
+                    string[] messages = receivedMessage.Split(new char[] { '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                    foreach (string str in messages)
+                    {
+                        ProcessMessage(str);
+                        stream.Flush();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogError($"UDP Client Error: {ex.Message}");
+                }
+            }
+        })
+        {
+            IsBackground = true
+        };
+        Thread udpSendThread = new Thread(() =>
+        {
+            while (isConnected)
+            {
+                SendPlayerInfoUDP(remoteEndPoint);
+                Thread.Sleep(10);
+            }
+        })
+        {
+            IsBackground = true
+        };
+        udpReceiveThread.Start();
+        udpSendThread.Start();
+    }
+    public void SendPlayerInfoUDP(IPEndPoint iPEndPoint)
+    {
+        localPlayerInfo.position = localPlayerInfo.position.Round(2);
+        string json = JsonUtility.ToJson(localPlayerInfo);
+        SendUDPData(json, iPEndPoint.Address.ToString(), iPEndPoint.Port);
+    }
+    public void SendUDPData(string message, string serverIP, int udpPort)
+    {
+        try
+        {
+            byte[] data = Encoding.UTF8.GetBytes(message);
+            udpClient.Send(data, data.Length, serverIP, udpPort);
+        }
+        catch { }
+
     }
 
     void ReceivePlayerData()
@@ -198,6 +281,7 @@ public class NetworkManager : MonoBehaviour
 
                         foreach (string str in strings)
                         {
+                            Debug.LogWarning(str);
                             ProcessMessage(str);
                             stream.Flush();
                         }
@@ -220,6 +304,7 @@ public class NetworkManager : MonoBehaviour
     void ProcessMessage(string m)
     {
         string check = JsonUtility.FromJson<TypeCheck>(m).type;
+        Debug.LogWarning(m);
         switch (check)
         {
             case "PlayerInfo":
@@ -389,9 +474,9 @@ public class NetworkManager : MonoBehaviour
 
     private void Update()
     {
+        if (isConnected) { localPlayerInfo.position = localPlayerObject.transform.position; localPlayerInfo.rotation = localPlayerObject.transform.rotation; }
         try
         {
-            if (isConnected) { localPlayerInfo.position = localPlayerObject.transform.position; localPlayerInfo.rotation = localPlayerObject.transform.rotation; }
         }
         catch { Disconnect(); Connect(address, port); }
 
@@ -415,6 +500,26 @@ public class NetworkManager : MonoBehaviour
                 }
                 Thread.Sleep(100);
             }
+        }
+        catch (Exception e)
+        {
+            Debug.LogError($"Error sending player data: {e.Message}");
+            Disconnect();
+        }
+    }
+    void SendPlayerDataTCP()
+    {
+        try
+        {
+            if (localPuppetID != -1)
+            {
+                localPlayerInfo.position = localPlayerInfo.position.Round(2);
+                string json = JsonUtility.ToJson(localPlayerInfo);
+                byte[] data = Encoding.ASCII.GetBytes(json + '\n');
+                stream.Write(data, 0, data.Length);
+            }
+            Thread.Sleep(100);
+
         }
         catch (Exception e)
         {
@@ -453,6 +558,9 @@ public class NetworkManager : MonoBehaviour
         byte[] send = Encoding.ASCII.GetBytes("Disconnect\n");
         stream.Write(send, 0, send.Length);
         Thread.Sleep(30);
+        if (stream != null) stream.Close();
+        if (client != null) client.Close();
+        if (udpClient != null) udpClient.Close();
         isConnected = false;
         if (clientThread != null && clientThread.IsAlive)
         {
@@ -463,9 +571,6 @@ public class NetworkManager : MonoBehaviour
         {
             sendThread.Join();
         }
-
-        if (stream != null) stream.Close();
-        if (client != null) client.Close();
 
         Debug.Log("Disconnected from server");
     }
@@ -523,6 +628,9 @@ public class NetworkManager : MonoBehaviour
         Command c = JsonUtility.FromJson<Command>(m);
         switch (c.command)
         {
+            case "PING":
+                SendPong(c);
+                break;
             case "ObjectSyncRequest":
                 Debug.LogError("ObjectSyncRequest is obsolete");
                 break;
@@ -614,14 +722,14 @@ static class ExtensionMethods
     public static Quaternion Round(this Quaternion quaternion, int decimalPlaces = 2)
     {
         float multiplier = 1;
-        for (int i = 0;i < decimalPlaces;i++)
+        for (int i = 0; i < decimalPlaces; i++)
         {
             multiplier *= 10f;
         }
         return new Quaternion(
-            Mathf.Round(quaternion.x*multiplier)/multiplier,
-            Mathf.Round(quaternion.y*multiplier)/multiplier,
-            Mathf.Round(quaternion.z*multiplier)/multiplier,
-            Mathf.Round(quaternion.w*multiplier)/multiplier);
+            Mathf.Round(quaternion.x * multiplier) / multiplier,
+            Mathf.Round(quaternion.y * multiplier) / multiplier,
+            Mathf.Round(quaternion.z * multiplier) / multiplier,
+            Mathf.Round(quaternion.w * multiplier) / multiplier);
     }
 }
